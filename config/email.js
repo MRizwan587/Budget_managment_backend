@@ -17,7 +17,7 @@ const transporter = nodemailer.createTransport({
 export async function sendOtpEmail(email, otp) {
     try {
         const mailOptions = {
-            from: `"Expense Tracker" <${process.env.EMAIL_USER}>`,
+            from: `"Budget Managment APP" <${process.env.EMAIL_USER}>`,
             to: email,
             subject: 'Your 2FA Verification Code',
             html: `
