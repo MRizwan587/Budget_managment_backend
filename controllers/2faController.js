@@ -10,7 +10,16 @@ import TwoFA from '../models/twoFA.js';
 import User from '../models/user.js'; // Assuming your User model is here
 import { sendOtpEmail } from '../config/email.js';
 
+// --- NEW IMPORT ---
+// Import the session token generator from the auth controller
+// Assuming authController.js is in the same directory (../controllers)
+import { generateSessionToken } from './authController.js'; 
+import { log } from 'console';
+// --- END NEW IMPORT ---
+
 const JWT_SECRET = process.env.JWT_SECRET || 'YOUR_SUPER_SECURE_JWT_SECRET';
+// NOTE: You can remove the unused JWT_SECRET variable here 
+// since generateSessionToken already uses process.env.JWT_SECRET.
 
 // --- Internal Helper Functions ---
 
@@ -25,7 +34,7 @@ export const generateOtpAndHash = async () => {
 
 /** * POST /api/2fa/setup - Initiates 2FA setup after user selects method. */
 export const setup2Fa = async (req, res) => {
-    // Note: userId should be obtained from an authenticated setup-token, not directly from body in production.
+    // ... (No changes here)
     const { userId, method } = req.body; 
 
     if (!['Email', 'AuthenticatorApp'].includes(method)) {
@@ -117,9 +126,12 @@ export const verify2Fa = async (req, res) => {
             await TwoFA.updateOne({ user: userId }, { $set: updateFields });
             
             const user = await User.findById(userId); // Get user for token payload
-            const token = jwt.sign({ id: userId, role: user.role }, JWT_SECRET, { expiresIn: '1d' });
             
-            return res.status(200).json({ message: '2FA verification successful.', token });
+            // --- REPLACE INLINE JWT.SIGN WITH EXPORTED FUNCTION ---
+            const token = generateSessionToken(userId, user.role); 
+            // --- END REPLACEMENT ---
+
+            return res.status(200).json({ message: '2FA verification successful.',user, token });
         } else {
             return res.status(401).json({ message: 'Invalid 2FA code.' });
         }
@@ -132,6 +144,7 @@ export const verify2Fa = async (req, res) => {
 
 /** * POST /api/2fa/resend - Resends OTP for Email method. */
 export const resendOtp = async (req, res) => {
+    // ... (No changes here)
     const { userId } = req.body;
     
     try {
@@ -161,19 +174,20 @@ export const resendOtp = async (req, res) => {
 
 /** * PATCH /api/2fa/reset/:userId - Admin feature: Deletes the user's 2FA record. */
 export const adminReset2Fa = async (req, res) => {
+    // ... (No changes here)
     const { userId } = req.params;
     
     // --- IMPORTANT: Implement Admin Role Check Middleware here ---
-    // if (!req.user || req.user.role !== 'Admin') { 
-    //     return res.status(403).json({ message: 'Access denied. Admin required.' });
-    // }
+    if (!req.user || req.user.role.toLowerCase() !== 'admin') {
+    return res.status(403).json({ message: 'Access denied.' });
+}
 
     try {
-        // Delete th    e 2FA record entirely, forcing SETUP_2FA flow on next login
+        // Delete the 2FA record entirely, forcing SETUP_2FA flow on next login
         const result = await TwoFA.deleteOne({ user: userId });
         
         if (result.deletedCount === 0) {
-            return res.status(404).json({ message: '2FA record not found for user.' });
+            return res.status(404).json({ message: '2FA record not found for user .', user: userId});
         }
 
         res.status(200).json({ message: `2FA successfully reset for user ${userId}.` });

@@ -7,7 +7,7 @@ import { generateOtpAndHash } from "./2faController.js"; // <-- NEW IMPORT: Help
 import { sendOtpEmail } from "../config/email.js"; // <-- NEW IMPORT: Email Sender
 
 // Generate JWT Token (Long-lived session token, only given after full 2FA verification)
-const generateSessionToken = (userId, role) => {
+export const generateSessionToken = (userId, role) => {
   return jwt.sign({ id: userId, role }, process.env.JWT_SECRET, {
     expiresIn: "7d", // 7 days expiration for the session token
   });

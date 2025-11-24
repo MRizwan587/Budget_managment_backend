@@ -1,5 +1,7 @@
 // backend/config/email.js (ES Module syntax)
 import nodemailer from 'nodemailer';
+import 'dotenv/config';
+
 
 // Use environment variables for production security!
 const transporter = nodemailer.createTransport({
@@ -26,7 +28,7 @@ export async function sendOtpEmail(email, otp) {
             `,
         };
         await transporter.sendMail(mailOptions);
-        console.log(`OTP sent to ${email}`);
+        console.log(`OTP ${otp} sent to ${email}`);
     } catch (error) {
         console.error('Error sending OTP email:', error);
         throw new Error('Failed to send OTP email.');

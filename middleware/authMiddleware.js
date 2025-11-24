@@ -31,8 +31,8 @@ export const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     // decode user sy ID nikal kar DB sy same user Fetch user fetch karna
-    const user = await User.findById(decoded.userId).select("-password");
-
+    const user = await User.findById(decoded.id).select("-password");
+    
     if (!user) {
       return res.status(401).json({
         success: false,
