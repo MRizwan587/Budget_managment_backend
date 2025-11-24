@@ -4,6 +4,8 @@ import speakeasy from 'speakeasy';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
+import qrcode from "qrcode";
+
 
 // Model and Config Imports
 import TwoFA from '../models/twoFA.js'; 
@@ -58,14 +60,16 @@ export const setup2Fa = async (req, res) => {
 
             const otpauthUrl = speakeasy.otpauthURL({
                 secret: secret.ascii,
-                label: `ExpenseTracker:${user.email}`,
-                issuer: 'Personal Tracker'
+                label: `budget_managment:${user.email}`,
+                issuer: 'Budget_manager_app'
             });
+            const qrImage = await qrcode.toDataURL(otpauthUrl);
 
             responsePayload = {
                 message: 'Scan the QR code to complete setup.',
                 secret: secret.base32,
                 otpauthUrl: otpauthUrl,
+                QrCode_Image: qrImage,
             };
         }
 
