@@ -38,7 +38,6 @@ export const generateOtpAndHash = async () => {
 export const setup2Fa = async (req, res) => {
     // ... (No changes here)
     const { userId, method } = req.body; 
-
     if (!['Email', 'AuthenticatorApp'].includes(method)) {
         return res.status(400).json({ message: 'Invalid 2FA method.' });
     }
@@ -52,6 +51,7 @@ export const setup2Fa = async (req, res) => {
 
         if (method === 'Email') {
             const { otp, hashedOtp } = await generateOtpAndHash();
+            console.log("otp generated for mail", user.email, otp )
             await sendOtpEmail(user.email, otp);
             secretData = { secretKey: hashedOtp };
         } else { // AuthenticatorApp (TOTP)

@@ -1,14 +1,14 @@
 import Transaction from "../models/transaction.js";
+import User from "../models/user.js";
 import Category from "../models/category.js";
 import mongoose from "mongoose";
 
 // POST /api/transactions
 export const createTransaction = async (req, res) => {
   try {
-    const { category, type, amount, description} = req.body;
-
+    const { category, type, amount, description } = req.body;
     // Validation
-    if (!category || !type || !amount ) {
+    if (!category || !type || !amount) {
       return res.status(400).json({
         success: false,
         message: "Please provide category, type, amount and date",
@@ -28,10 +28,7 @@ export const createTransaction = async (req, res) => {
     // User can only use:
     // 1. Their own category
     // 2. Global admin category (user = null)
-    if (
-      findCategory.user &&
-      String(findCategory.user) !== String(req.userId)
-    ) {
+    if (findCategory.user && String(findCategory.user) !== String(req.userId)) {
       return res.status(403).json({
         success: false,
         message: "You cannot use this category",
@@ -40,12 +37,11 @@ export const createTransaction = async (req, res) => {
 
     // Create transaction
     const newTransaction = new Transaction({
-      user: req.userId,
+      user: req.user.id,
       category,
       type,
       amount,
       description,
-      
     });
 
     await newTransaction.save();
@@ -65,21 +61,27 @@ export const createTransaction = async (req, res) => {
   }
 };
 
+// GET /api/transactions?page=1&limit=10&type=Income&category=Food&minAmount=100&maxAmount=500&month=2025-11
 
-//GET /api/transactions?month=&category=
 export const getTransactions = async (req, res) => {
   try {
-    const { month, category } = req.query;
+    const {
+      page = 1,
+      limit = 10,
+      type,
+      category,
+      minAmount,
+      maxAmount,
+      month,
+    } = req.query;
+    
+    
 
-    const filter = { user: req.userId };
+    const filter = {}; // No user filter
 
-    // Filter by month
-    if (month) {
-      const start = new Date(`${month}-01`);
-      const end = new Date(start);
-      end.setMonth(start.getMonth() + 1);
-
-      filter.date = { $gte: start, $lt: end };
+    // Filter by type (Income / Expense)
+    if (type) {
+      filter.type = type; // expect: "Income" or "Expense"
     }
 
     // Filter by category
@@ -87,12 +89,41 @@ export const getTransactions = async (req, res) => {
       filter.category = category;
     }
 
+    // Filter by amount
+    if (minAmount || maxAmount) {
+      filter.amount = {};
+      if (minAmount) filter.amount.$gte = Number(minAmount);
+      if (maxAmount) filter.amount.$lte = Number(maxAmount);
+    }
+
+    // Filter by month (YYYY-MM format)
+    if (month && month !== "ALL") {
+      const start = new Date(`${month}-01`);
+      const end = new Date(start);
+      end.setMonth(start.getMonth() + 1);
+
+      filter.date = { $gte: start, $lt: end };
+    }
+
+    // Pagination values
+    const skip = (Number(page) - 1) * Number(limit);
+
+    // Fetch transactions
     const transactions = await Transaction.find(filter)
       .populate("category", "name")
-      .sort({ date: -1 });
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(Number(limit));
+
+    // Count total documents for pagination
+    const total = await Transaction.countDocuments(filter);
 
     return res.status(200).json({
       success: true,
+      currentPage: Number(page),
+      totalPages: Math.ceil(total / Number(limit)),
+      totalRecords: total,
+      pageSize: Number(limit),
       data: transactions,
     });
   } catch (error) {
@@ -104,6 +135,7 @@ export const getTransactions = async (req, res) => {
     });
   }
 };
+
 
 //GET /api/transactions/:id
 export const getTransactionById = async (req, res) => {
@@ -155,7 +187,9 @@ export const updateTransaction = async (req, res) => {
     if (category) {
       const cat = await Category.findById(category);
       if (!cat) {
-        return res.status(404).json({ success: false, message: "Category not found" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Category not found" });
       }
       if (cat.user && String(cat.user) !== String(req.userId)) {
         return res.status(403).json({
@@ -221,75 +255,87 @@ export const deleteTransaction = async (req, res) => {
 
 export const getMonthlySummary = async (req, res) => {
   try {
-    const { month } = req.query;
+    const { month, category } = req.query;
 
-    if (!month) {
-      return res.status(400).json({
-        success: false,
-        message: "Please provide month in format YYYY-MM",
-      });
+    // no user filter since you want all transactions
+     const filter= {};
+    // Filter by month
+    if (month && month !== "ALL") {
+      const start = new Date(`${month}-01`);
+      const end = new Date(start);
+      end.setMonth(start.getMonth() + 1);
+
+      filter.date = { $gte: start, $lt: end };
     }
 
-    // Month range
-    const start = new Date(`${month}-01`);
-    const end = new Date(start);
-    end.setMonth(start.getMonth() + 1);
+    // Filter by category
+    if (category) {
+      filter.category = category;
+    }
 
-    // User ID must be ObjectId (important fix)
-    const userId = new mongoose.Types.ObjectId(req.userId);
+    // Fetch all transactions matching filter
+    const transactions = await Transaction.find(filter)
+      .populate("category", "name")
+      .sort({ date: -1 });
 
-    const summary = await Transaction.aggregate([
-      {
-        $match: {
-          user: userId,
-          date: { $gte: start, $lt: end },
-        },
-      },
-      {
-        $group: {
-          _id: "$type",        // Income / Expense
-          totalAmount: { $sum: "$amount" },
-          count: { $sum: 1 },
-        },
-      },
-    ]);
+    // Prepare summary
+    let totalIncome = 0;
+    let totalExpense = 0;
+    const transactionData = [];
 
-    // Defaults
-    let income = 0;
-    let expense = 0;
-    let incomeCount = 0;
-    let expenseCount = 0;
+    transactions.forEach((t) => {
+      const type = t.type?.toLowerCase() === "income" ? "Income" : "Expense";
 
-    summary.forEach((item) => {
-      if (item._id === "Income") {
-        income = item.totalAmount;
-        incomeCount = item.count;
-      }
-      if (item._id === "Expense") {
-        expense = item.totalAmount;
-        expenseCount = item.count;
-      }
+      if (type === "Income") totalIncome += t.amount;
+      else totalExpense += t.amount;
+
+      transactionData.push({
+        _id: t._id,
+        type: type,
+        amount: t.amount,
+        category: t.category?.name || null,
+        date: t.date,
+      });
     });
+
+    const stats = {
+      totalIncome,
+      totalExpense,
+      balance: totalIncome - totalExpense,
+      totalTransactions: transactions.length,
+      incomeCount: transactions.filter(
+        (t) => t.type?.toLowerCase() === "income"
+      ).length,
+      expenseCount: transactions.filter(
+        (t) => t.type?.toLowerCase() === "expense"
+      ).length,
+    };
 
     return res.status(200).json({
       success: true,
-      month,
-      stats: {
-        totalIncome: income,
-        totalExpense: expense,
-        balance: income - expense,
-        totalTransactions: incomeCount + expenseCount,
-        incomeCount,
-        expenseCount,
-      },
-      summary,
+      month: month || "ALL",
+      stats,
+      transactionData,
     });
   } catch (error) {
-    console.error("Monthly summary error:", error);
+    console.error("Transaction summary error:", error);
     return res.status(500).json({
       success: false,
-      message: "Error fetching summary",
+      message: "Failed to fetch summary",
       error: error.message,
     });
+  }
+};
+
+export const getRecentTransactions = async (req, res) => {
+  try {
+    const transactions = await Transaction.find({ })
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("category", "name");
+
+    res.json({ success: true, data: transactions });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };

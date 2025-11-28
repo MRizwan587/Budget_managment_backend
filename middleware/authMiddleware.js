@@ -41,7 +41,7 @@ export const verifyToken = async (req, res, next) => {
     }
 
     // store inside the request 
-    req.userId = decoded.userId;
+    req.userId = decoded.id;
     req.user = user;
 
     // Continue to next
