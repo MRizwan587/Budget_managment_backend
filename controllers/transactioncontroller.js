@@ -61,7 +61,7 @@ export const createTransaction = async (req, res) => {
   }
 };
 
-// GET /api/transactions?page=1&limit=10&type=Income&category=Food&minAmount=100&maxAmount=500&month=2025-11
+// GET /api/transactions?page=1&limit=10&type=Income&category=Food&minAmount=100&maxAmount=500&startDate=2025-11-01&endDate=2025-11-30
 
 export const getTransactions = async (req, res) => {
   try {
@@ -72,16 +72,15 @@ export const getTransactions = async (req, res) => {
       category,
       minAmount,
       maxAmount,
-      month,
+      startDate,
+      endDate,
     } = req.query;
-    
-    
 
     const filter = {}; // No user filter
 
-    // Filter by type (Income / Expense)
+    // Filter by type
     if (type) {
-      filter.type = type; // expect: "Income" or "Expense"
+      filter.type = type;
     }
 
     // Filter by category
@@ -96,26 +95,32 @@ export const getTransactions = async (req, res) => {
       if (maxAmount) filter.amount.$lte = Number(maxAmount);
     }
 
-    // Filter by month (YYYY-MM format)
-    if (month && month !== "ALL") {
-      const start = new Date(`${month}-01`);
-      const end = new Date(start);
-      end.setMonth(start.getMonth() + 1);
+    // ✅ Date Range Filter (startDate + endDate)
+    if (startDate || endDate) {
+      filter.date = {};
 
-      filter.date = { $gte: start, $lt: end };
+      if (startDate) {
+        filter.date.$gte = new Date(startDate); // Start Date
+      }
+
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999); // include full day
+        filter.date.$lte = end; // End Date
+      }
     }
 
-    // Pagination values
+    // Pagination
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Fetch transactions
+    // Fetch data
     const transactions = await Transaction.find(filter)
       .populate("category", "name")
       .sort({ date: -1 })
       .skip(skip)
       .limit(Number(limit));
 
-    // Count total documents for pagination
+    // Count total
     const total = await Transaction.countDocuments(filter);
 
     return res.status(200).json({
@@ -126,6 +131,7 @@ export const getTransactions = async (req, res) => {
       pageSize: Number(limit),
       data: transactions,
     });
+
   } catch (error) {
     console.error("Get transaction error:", error);
     return res.status(500).json({
@@ -135,6 +141,7 @@ export const getTransactions = async (req, res) => {
     });
   }
 };
+
 
 
 //GET /api/transactions/:id

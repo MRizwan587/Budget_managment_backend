@@ -21,6 +21,35 @@ export const getCategories = async (req, res) => {
   }
 };
 
+// GET /api/categories/:id
+export const getCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Find category by id AND check that it's either global or belongs to the user
+    const category = await Category.findOne({
+      _id: id,
+      $or: [
+        { user: null },        // global category
+        { user: req.userId },  // user's own category
+      ],
+      active: true,
+    });
+
+    if (!category) {
+      return res.status(404).json({ success: false, message: "Category not found" });
+    }
+
+    res.json({
+      success: true,
+      category,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: "Server error", error: err.message });
+  }
+};
+
+
 // POST /api/categories
 export const addCategory = async (req, res) => {
   try {

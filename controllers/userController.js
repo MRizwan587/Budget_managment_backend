@@ -1,11 +1,12 @@
 
+import { log } from "console";
 import User from "../models/user.js"
 
 
 export const getAllUsers = async (req, res) => {
     try {
         // 1. Get Pagination Parameters
-        let { page, limit, name, role } = req.query;
+        let { page, limit, name, role, status } = req.query;
 
         // Default pagination values
         page = parseInt(page) || 1;
@@ -13,7 +14,6 @@ export const getAllUsers = async (req, res) => {
 
         // 2. Build Query Object for Filtering
         const query = {};
-
         // Filter by Role (if provided)
         if (role) {
             query.role = role; // Assuming role is an exact match (e.g., 'admin', 'user')
@@ -23,6 +23,9 @@ export const getAllUsers = async (req, res) => {
         if (name) {
             // Use Mongoose regex for case-insensitive partial matching
             query.name = { $regex: name, $options: 'i' }; 
+        }
+        if (status) {
+            query.status = status; 
         }
 
         // 3. Handle 'Return ALL' case (if no page/limit provided in the original request)

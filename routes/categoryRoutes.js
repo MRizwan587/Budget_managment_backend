@@ -1,6 +1,7 @@
 import express from "express";
 import {
   getCategories,
+  getCategory,
   addCategory,
   updateCategory,
   updateCategoryStatus,
@@ -17,6 +18,8 @@ router.use(verifyToken);
 // GET global + user categories
 router.get("/", getCategories);
 
+
+
 // POST category (user-created or admin global)
 router.post("/",verifyToken, addCategory);
 
@@ -28,5 +31,8 @@ router.patch("/:id/status",verifyToken,  updateCategoryStatus);
 
 //delete
 router.delete("/:id", verifyToken, deleteCategory);
+
+// GET global + user categories + id catagory 
+router.get("/:id", getCategory);
 
 export default router;
