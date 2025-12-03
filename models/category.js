@@ -6,7 +6,6 @@ const categorySchema = new mongoose.Schema({
     required: true,
   },
 
-  // null = global category (admin-created)
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",

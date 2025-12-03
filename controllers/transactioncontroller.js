@@ -1,13 +1,11 @@
 import Transaction from "../models/transaction.js";
-import User from "../models/user.js";
 import Category from "../models/category.js";
-import mongoose from "mongoose";
+import { log } from "console";
 
 // POST /api/transactions
 export const createTransaction = async (req, res) => {
   try {
     const { category, type, amount, description } = req.body;
-    // Validation
     if (!category || !type || !amount) {
       return res.status(400).json({
         success: false,
@@ -15,7 +13,6 @@ export const createTransaction = async (req, res) => {
       });
     }
 
-    // Check if category exists
     const findCategory = await Category.findById(category);
 
     if (!findCategory) {
@@ -25,9 +22,6 @@ export const createTransaction = async (req, res) => {
       });
     }
 
-    // User can only use:
-    // 1. Their own category
-    // 2. Global admin category (user = null)
     if (findCategory.user && String(findCategory.user) !== String(req.userId)) {
       return res.status(403).json({
         success: false,
@@ -62,7 +56,6 @@ export const createTransaction = async (req, res) => {
 };
 
 // GET /api/transactions?page=1&limit=10&type=Income&category=Food&minAmount=100&maxAmount=500&startDate=2025-11-01&endDate=2025-11-30
-
 export const getTransactions = async (req, res) => {
   try {
     const {
@@ -76,51 +69,48 @@ export const getTransactions = async (req, res) => {
       endDate,
     } = req.query;
 
-    const filter = {}; // No user filter
+    const filter = {};
 
-    // Filter by type
+    if (req.role !== "admin") {
+      filter.user = req.userId;
+    }
     if (type) {
       filter.type = type;
     }
 
-    // Filter by category
     if (category) {
       filter.category = category;
     }
 
-    // Filter by amount
     if (minAmount || maxAmount) {
       filter.amount = {};
       if (minAmount) filter.amount.$gte = Number(minAmount);
       if (maxAmount) filter.amount.$lte = Number(maxAmount);
     }
 
-    // ✅ Date Range Filter (startDate + endDate)
     if (startDate || endDate) {
       filter.date = {};
 
       if (startDate) {
-        filter.date.$gte = new Date(startDate); // Start Date
+        filter.date.$gte = new Date(startDate);
       }
 
       if (endDate) {
         const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999); // include full day
-        filter.date.$lte = end; // End Date
+        end.setHours(23, 59, 59, 999);
+        filter.date.$lte = end;
       }
     }
 
     // Pagination
     const skip = (Number(page) - 1) * Number(limit);
 
-    // Fetch data
     const transactions = await Transaction.find(filter)
       .populate("category", "name")
       .sort({ date: -1 })
       .skip(skip)
       .limit(Number(limit));
 
-    // Count total
     const total = await Transaction.countDocuments(filter);
 
     return res.status(200).json({
@@ -131,7 +121,6 @@ export const getTransactions = async (req, res) => {
       pageSize: Number(limit),
       data: transactions,
     });
-
   } catch (error) {
     console.error("Get transaction error:", error);
     return res.status(500).json({
@@ -141,7 +130,6 @@ export const getTransactions = async (req, res) => {
     });
   }
 };
-
 
 
 //GET /api/transactions/:id
@@ -188,7 +176,6 @@ export const updateTransaction = async (req, res) => {
       });
     }
 
-    // Only update provided fields
     const { category, type, amount, description, date } = req.body;
 
     if (category) {
@@ -264,9 +251,13 @@ export const getMonthlySummary = async (req, res) => {
   try {
     const { month, category } = req.query;
 
-    // no user filter since you want all transactions
-     const filter= {};
-    // Filter by month
+    const filter = {};
+
+    if (req.role !== "admin") {
+      filter.user = req.userId;
+    }
+
+    // MONTH FILTER
     if (month && month !== "ALL") {
       const start = new Date(`${month}-01`);
       const end = new Date(start);
@@ -275,54 +266,46 @@ export const getMonthlySummary = async (req, res) => {
       filter.date = { $gte: start, $lt: end };
     }
 
-    // Filter by category
+    // CATEGORY FILTER
     if (category) {
       filter.category = category;
     }
+    const recentFilter = {};
 
-    // Fetch all transactions matching filter
+    if (req.role !== "admin") {
+      recentFilter.user = req.userId;
+    }
+
+    const transactionRecent = await Transaction.find(recentFilter)
+      .sort({ createdAt: -1 })
+      .limit(5)
+      .populate("category", "name");
+
     const transactions = await Transaction.find(filter)
       .populate("category", "name")
       .sort({ date: -1 });
 
-    // Prepare summary
+    // CALCULATE SUMMARY
     let totalIncome = 0;
     let totalExpense = 0;
-    const transactionData = [];
 
     transactions.forEach((t) => {
       const type = t.type?.toLowerCase() === "income" ? "Income" : "Expense";
 
       if (type === "Income") totalIncome += t.amount;
       else totalExpense += t.amount;
-
-      transactionData.push({
-        _id: t._id,
-        type: type,
-        amount: t.amount,
-        category: t.category?.name || null,
-        date: t.date,
-      });
     });
 
     const stats = {
       totalIncome,
       totalExpense,
       balance: totalIncome - totalExpense,
-      totalTransactions: transactions.length,
-      incomeCount: transactions.filter(
-        (t) => t.type?.toLowerCase() === "income"
-      ).length,
-      expenseCount: transactions.filter(
-        (t) => t.type?.toLowerCase() === "expense"
-      ).length,
     };
 
     return res.status(200).json({
       success: true,
-      month: month || "ALL",
       stats,
-      transactionData,
+      transactionRecent,
     });
   } catch (error) {
     console.error("Transaction summary error:", error);
@@ -331,18 +314,5 @@ export const getMonthlySummary = async (req, res) => {
       message: "Failed to fetch summary",
       error: error.message,
     });
-  }
-};
-
-export const getRecentTransactions = async (req, res) => {
-  try {
-    const transactions = await Transaction.find({ })
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate("category", "name");
-
-    res.json({ success: true, data: transactions });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
   }
 };

@@ -1,13 +1,8 @@
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
 
-
-
-// Middleware to verify JWT token
 export const verifyToken = async (req, res, next) => {
   try {
-    
-    // Here we Get token from Authorization header Format: "Bearer"
     const authHeader = req.headers.authorization;
 
     if (!authHeader) {
@@ -16,23 +11,16 @@ export const verifyToken = async (req, res, next) => {
         message: "No authorization header provided",
       });
     }
-
-    // Extract token from "Bearer"
     const token = authHeader.split(" ")[1];
-
     if (!token) {
       return res.status(401).json({
         success: false,
         message: "No token provided",
       });
     }
-
-    // Verify token decode kar ky user ki info nikalna with secrete key 
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-
-    // decode user sy ID nikal kar DB sy same user Fetch user fetch karna
     const user = await User.findById(decoded.id).select("-password");
-    
+
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -40,11 +28,11 @@ export const verifyToken = async (req, res, next) => {
       });
     }
 
-    // store inside the request 
+    // store inside the request
     req.userId = decoded.id;
     req.user = user;
+    req.role = user.role;
 
-    // Continue to next
     next();
   } catch (error) {
     // Handle different JWT errors
@@ -61,8 +49,6 @@ export const verifyToken = async (req, res, next) => {
         message: "Invalid token",
       });
     }
-
-    // Other errors
     console.error("Token verification error:", error);
     return res.status(401).json({
       success: false,

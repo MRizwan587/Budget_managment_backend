@@ -1,29 +1,26 @@
-// backend/controllers/authController.js
-
 import jwt from "jsonwebtoken";
 import User from "../models/user.js";
-import TwoFA from "../models/twoFA.js"; // <-- NEW IMPORT: Mongoose 2FA Model
-import { generateOtpAndHash } from "./2faController.js"; // <-- NEW IMPORT: Helper for OTP
-import { sendOtpEmail } from "../config/email.js"; // <-- NEW IMPORT: Email Sender
+import TwoFA from "../models/twoFA.js"; 
+import { generateOtpAndHash } from "./2faController.js"; 
+import { sendOtpEmail } from "../config/email.js"; 
 
-// Generate JWT Token (Long-lived session token, only given after full 2FA verification)
 export const generateSessionToken = (userId, role) => {
   return jwt.sign({ id: userId, role }, process.env.JWT_SECRET, {
-    expiresIn: "7d", // 7 days expiration for the session token
+    expiresIn: "7d", 
   });
 };
 
-// Register Controller (No changes needed here for the 2FA flow)
+
 export const register = async (req, res) => {
   try {
-    const { name, email, password, role } = req.body; // Validation
+    const { name, email, password, role } = req.body; 
 
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
         message: "Please provide name, email, and password",
       });
-    } // Check if user already exists
+    } 
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -31,23 +28,23 @@ export const register = async (req, res) => {
         success: false,
         message: "User with this email already exists",
       });
-    } // Validate role if provided
+    } 
 
     if (role && !["user", "admin"].includes(role)) {
       return res.status(400).json({
         success: false,
         message: "Role must be either 'user' or 'admin'",
       });
-    } // Create new user
-
+    } 
+    // Create new user
     const user = new User({
       name,
       email,
       password,
-      role: role || "user", // Default to "user" if not provided
+      role: role || "user", 
     });
 
-    await user.save(); // NOTE: We don't generate a full session token here. // The user must pass through 2FA setup first. // Return success message and next step for 2FA onboarding
+    await user.save(); 
 
     res.status(201).json({
       success: true,
@@ -59,7 +56,7 @@ export const register = async (req, res) => {
           email: user.email,
           role: user.role,
           status: user.status,
-        }, // Return a setup token (short-lived) to be used for the /api/2fa/setup call
+        }, 
         nextStep: "SETUP_2FA",
         setupToken: jwt.sign(
           { id: user._id, setup: true },
@@ -78,17 +75,17 @@ export const register = async (req, res) => {
   }
 };
 
-// Signin Controller (UPDATED for 2FA)
+
 export const login = async (req, res) => {
   try {
-    const { email, password } = req.body; // 1. Basic Validation
+    const { email, password } = req.body; 
 
     if (!email || !password) {
       return res.status(400).json({
         success: false,
         message: "Please provide email and password",
       });
-    } // 2. Find User and Check Credentials
+    } 
 
     const user = await User.findOne({ email });
     if (
@@ -102,9 +99,9 @@ export const login = async (req, res) => {
       });
     }
 
-    const userId = user._id; // 3. Check 2FA Status
+    const userId = user._id; 
 
-    const twoFaRecord = await TwoFA.findOne({ user: userId }); // Case B: No 2FA setup exists (First login or Admin reset)
+    const twoFaRecord = await TwoFA.findOne({ user: userId }); 
     if (!twoFaRecord) {
       const setupToken = jwt.sign(
         { id: userId, setup: true },
@@ -114,24 +111,24 @@ export const login = async (req, res) => {
 
       return res.status(202).json({
         success: true,
+        twofa: false,
         message: "2FA required. Please choose a setup method.",
         nextStep: "SETUP_2FA",
-        data: { userId, setupToken },
+        data: { id: userId, setupToken },
       });
-    } // Case A: 2FA Setup exists (Verified or Unverified)
+    } 
 
     if (twoFaRecord.method === "Email" || !twoFaRecord.verified) {
-      // If Email: Generate new OTP and send it.
-      // If App but not verified: user must complete verification.
+     
       if (twoFaRecord.method === "Email") {
-        // Generate new OTP for this login
+    
         const { otp, hashedOtp } = await generateOtpAndHash();
-        await sendOtpEmail(user.email, otp); // Update the secret key and reset 'verified' status to force verification
+        await sendOtpEmail(user.email, otp); 
         await TwoFA.updateOne(
           { user: userId },
           { $set: { secretKey: hashedOtp, verified: false } }
         );
-      } // Direct to the verification step using 202 Accepted
+      }
 
       return res.status(202).json({
         success: true,
@@ -139,7 +136,7 @@ export const login = async (req, res) => {
         nextStep: "VERIFY_2FA",
         data: { userId, method: twoFaRecord.method },
       });
-    } // Case A-Verified: Authenticator App is set up and verified (needs code input only) // No server action is needed here, frontend prompts for code and calls /api/2fa/verify
+    } 
     return res.status(202).json({
       success: true,
       message: "Please enter your Authenticator App code to complete login.",

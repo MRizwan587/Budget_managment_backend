@@ -13,7 +13,7 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+
 app.use(cors());
 app.use(bodyParser.json());
 
@@ -28,11 +28,11 @@ app.get("/", (req, res) => {
 });
 
 
-app.use("/api/auth", authroutes); 
-app.use('/api/users', userRoutes);
-app.use('/api/transactions', transactionRoute);
-app.use("/api/categories", categoryRoutes);
-app.use('/api/2fa', twoFaRoutes);
+app.use("/auth", authroutes); 
+app.use('/users', userRoutes);
+app.use("/categories", categoryRoutes);
+app.use('/2fa', twoFaRoutes);
+app.use('/', transactionRoute);
 
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

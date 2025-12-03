@@ -1,25 +1,22 @@
 import express from "express";
-import {createTransaction,
+import {
+  createTransaction,
   getTransactions,
   getTransactionById,
   updateTransaction,
   deleteTransaction,
   getMonthlySummary,
-  getRecentTransactions
-} from "../controllers/transactioncontroller.js"
+} from "../controllers/transactioncontroller.js";
 import { verifyToken } from "../middleware/authMiddleware.js";
 
 const router = express.Router();
-router.use(verifyToken)
-router.post("/",  createTransaction);
-router.get("/",  getTransactions);
+router.use(verifyToken);
+router.post("/transactions", createTransaction);
+router.get("/transactions", getTransactions);
 
-router.get("/summary", getMonthlySummary);
-router.get("/recent", getRecentTransactions)
-router.get("/:id",  getTransactionById);
-router.put("/:id",  updateTransaction);
-router.delete("/:id",  deleteTransaction);
-
-
+router.get("/dashboard-stats", getMonthlySummary);
+router.get("/:id", getTransactionById);
+router.put("/:id", updateTransaction);
+router.delete("/:id", deleteTransaction);
 
 export default router;
