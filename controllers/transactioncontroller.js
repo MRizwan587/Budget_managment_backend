@@ -6,13 +6,14 @@ import { log } from "console";
 export const createTransaction = async (req, res) => {
   try {
     const { category, type, amount, description } = req.body;
-    if (!category || !type || !amount) {
+    
+    if (!category || !type|| !amount) {
       return res.status(400).json({
         success: false,
         message: "Please provide category, type, amount and date",
       });
     }
-
+     const typeToLower=type.toLowerCase();
     const findCategory = await Category.findById(category);
 
     if (!findCategory) {
@@ -33,7 +34,7 @@ export const createTransaction = async (req, res) => {
     const newTransaction = new Transaction({
       user: req.user.id,
       category,
-      type,
+      type: typeToLower,
       amount,
       description,
     });
@@ -130,7 +131,6 @@ export const getTransactions = async (req, res) => {
     });
   }
 };
-
 
 //GET /api/transactions/:id
 export const getTransactionById = async (req, res) => {
@@ -249,7 +249,7 @@ export const deleteTransaction = async (req, res) => {
 
 export const getMonthlySummary = async (req, res) => {
   try {
-    const { month, category } = req.query;
+    // const { month, category } = req.query;
 
     const filter = {};
 
@@ -258,43 +258,46 @@ export const getMonthlySummary = async (req, res) => {
     }
 
     // MONTH FILTER
-    if (month && month !== "ALL") {
-      const start = new Date(`${month}-01`);
-      const end = new Date(start);
-      end.setMonth(start.getMonth() + 1);
+    // if (month && month !== "ALL") {
+    //   const start = new Date(`${month}-01`);
+    //   const end = new Date(start);
+    //   end.setMonth(start.getMonth() + 1);
 
-      filter.date = { $gte: start, $lt: end };
-    }
+    //   filter.date = { $gte: start, $lt: end };
+    // }
 
     // CATEGORY FILTER
-    if (category) {
-      filter.category = category;
-    }
-    const recentFilter = {};
+    // if (category) {
+    //   filter.category = category;
+    // }
+    // const recentFilter = {};
 
-    if (req.role !== "admin") {
-      recentFilter.user = req.userId;
-    }
+    // if (req.role !== "admin") {
+    //   recentFilter.user = req.userId;
+    // }
 
-    const transactionRecent = await Transaction.find(recentFilter)
-      .sort({ createdAt: -1 })
-      .limit(5)
-      .populate("category", "name");
+    // const transactionRecent = await Transaction.find(recentFilter)
+    //   .sort({ createdAt: -1 })
+    //   .limit(5)
+    //   .populate("category", "name");
 
     const transactions = await Transaction.find(filter)
       .populate("category", "name")
       .sort({ date: -1 });
 
-    // CALCULATE SUMMARY
     let totalIncome = 0;
     let totalExpense = 0;
-
-    transactions.forEach((t) => {
-      const type = t.type?.toLowerCase() === "income" ? "Income" : "Expense";
-
-      if (type === "Income") totalIncome += t.amount;
+    const transactionRecent = transactions.slice(0,5);
+    // transactions.forEach((t) => {
+    //   const type = t.type?.toLowerCase() === "income" ? "Income" : "Expense";
+    //   if (type === "Income") totalIncome += t.amount;
+    //   else totalExpense += t.amount;
+    // });
+    for(const t of transactions){
+      const type = t.type === "income" ? "income" : "expense";
+      if (type === "income") totalIncome += t.amount;
       else totalExpense += t.amount;
-    });
+    }
 
     const stats = {
       totalIncome,
